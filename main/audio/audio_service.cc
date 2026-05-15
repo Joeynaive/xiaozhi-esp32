@@ -27,6 +27,7 @@
 #else
 #include "processors/no_audio_processor.h"
 #endif
+#include "music_analyzer.h"
 
 #if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32P4
 #include "wake_words/afe_wake_word.h"
@@ -223,6 +224,17 @@ bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, in
     }
     audio_debugger_->Feed(data);
 #endif
+
+    // 氛围节拍器：分析音频能量
+    if (codec_->input_channels() == 2) {
+        std::vector<int16_t> mono(data.size() / 2);
+        for (size_t i = 0; i < mono.size(); i++) {
+            mono[i] = data[i * 2];
+        }
+        MusicAnalyzer::GetInstance().Feed(mono);
+    } else {
+        MusicAnalyzer::GetInstance().Feed(data);
+    }
 
     return true;
 }

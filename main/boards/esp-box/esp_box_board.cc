@@ -165,6 +165,10 @@ public:
         return display_;
     }
 
+    virtual i2c_master_bus_handle_t GetI2cBus() override {
+        return i2c_bus_;
+    }
+    
     virtual Backlight* GetBacklight() override {
         static PwmBacklight backlight(DISPLAY_BACKLIGHT_PIN, DISPLAY_BACKLIGHT_OUTPUT_INVERT);
         return &backlight;

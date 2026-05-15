@@ -165,3 +165,23 @@ void SingleLed::OnStateChanged() {
             return;
     }
 }
+
+void SingleLed::ShowEnergy(float energy) {
+    if (led_strip_ == nullptr) {
+        return;
+    }
+    
+    // 仅在空闲状态下显示音乐脉冲
+    if (Application::GetInstance().GetDeviceState() != kDeviceStateIdle) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    uint8_t br = (uint8_t)(energy * 100.0f); 
+    if (br > 2) { // 忽略微弱噪声
+        led_strip_set_pixel(led_strip_, 0, br, br, br);
+        led_strip_refresh(led_strip_);
+    } else {
+        led_strip_clear(led_strip_);
+    }
+}

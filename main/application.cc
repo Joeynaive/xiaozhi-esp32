@@ -9,6 +9,11 @@
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
+#include "emotion_manager.h"
+#include "proactive_manager.h"
+#include "sensor_manager.h"
+#include "music_analyzer.h"
+#include "audio/a2dp_service.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -59,7 +64,11 @@ bool Application::SetDeviceState(DeviceState state) {
 }
 
 void Application::Initialize() {
+    EmotionManager::GetInstance().Initialize();
+    ProactiveManager::GetInstance().Initialize();
     auto& board = Board::GetInstance();
+    SensorManager::GetInstance().Initialize(board.GetI2cBus());
+    
     SetDeviceState(kDeviceStateStarting);
 
     // Setup the display
@@ -87,6 +96,9 @@ void Application::Initialize() {
 
     // Add state change listeners
     state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
+        if (old_state == kDeviceStateBluetoothMode && new_state == kDeviceStateIdle) {
+            audio_service_.Start();
+        }
         xEventGroupSetBits(event_group_, MAIN_EVENT_STATE_CHANGED);
     });
 
@@ -154,6 +166,27 @@ void Application::Initialize() {
                 break;
         }
     });
+    
+    // 注册氛围节拍器回调
+    MusicAnalyzer::GetInstance().OnBeat([this](float strength) {
+        if (GetDeviceState() == kDeviceStateIdle) {
+            auto display = Board::GetInstance().GetDisplay();
+            // 简单反馈：如果是强节拍，触发 happy 动画，弱节拍则眨眼
+            if (strength > 0.15f) {
+                display->InsertAnimDialog("happy", 500);
+            } else {
+                display->InsertAnimDialog("neutral", 300);
+            }
+        }
+    });
+
+    MusicAnalyzer::GetInstance().OnEnergy([this](float energy) {
+        auto led = Board::GetInstance().GetLed();
+        led->ShowEnergy(energy);
+    });
+
+    // 启动蓝牙音箱服务 (默认开启，等待连接)
+    A2dpService::GetInstance().Start("Xiaozhi Pet");
 
     // Start network asynchronously
     board.StartNetwork();
@@ -206,10 +239,12 @@ void Application::Run() {
         }
 
         if (bits & MAIN_EVENT_TOGGLE_CHAT) {
+            ProactiveManager::GetInstance().OnUserInteraction();
             HandleToggleChatEvent();
         }
 
         if (bits & MAIN_EVENT_START_LISTENING) {
+            ProactiveManager::GetInstance().OnUserInteraction();
             HandleStartListeningEvent();
         }
 
@@ -226,6 +261,7 @@ void Application::Run() {
         }
 
         if (bits & MAIN_EVENT_WAKE_WORD_DETECTED) {
+            ProactiveManager::GetInstance().OnUserInteraction();
             HandleWakeWordDetectedEvent();
         }
 
@@ -249,6 +285,11 @@ void Application::Run() {
             clock_ticks_++;
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
+        
+            // 每 10 秒根据情绪状态更新一次表情（仅在空闲状态下）
+            if (clock_ticks_ % 10 == 0 && GetDeviceState() == kDeviceStateIdle) {
+                display->SetEmotion(EmotionManager::GetInstance().GetCurrentEmotion().c_str());
+            }
         
             // Print debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
@@ -531,6 +572,8 @@ void Application::InitializeProtocol() {
             } else if (strcmp(state->valuestring, "stop") == 0) {
                 Schedule([this]() {
                     if (GetDeviceState() == kDeviceStateSpeaking) {
+                        // 交互成功，提升心情
+                        EmotionManager::GetInstance().Play(2.0f);
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
                         } else {
@@ -672,6 +715,7 @@ void Application::StopListening() {
 }
 
 void Application::HandleToggleChatEvent() {
+    ProactiveManager::GetInstance().OnUserInteraction();
     auto state = GetDeviceState();
     
     if (state == kDeviceStateActivating) {
@@ -778,6 +822,7 @@ void Application::HandleStopListeningEvent() {
 }
 
 void Application::HandleWakeWordDetectedEvent() {
+    ProactiveManager::GetInstance().OnUserInteraction();
     if (!protocol_) {
         return;
     }
@@ -924,6 +969,11 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateWifiConfiguring:
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(false);
+            break;
+        case kDeviceStateBluetoothMode:
+            display->SetStatus("蓝牙音箱模式");
+            display->SetEmotion("happy");
+            audio_service_.Stop(); // 停止原有音频采集
             break;
         default:
             // Do nothing
@@ -1073,6 +1123,32 @@ bool Application::CanEnterSleepMode() {
 
 void Application::RegisterMcpBroadcastCallback(std::function<void(const std::string&)> callback) {
     mcp_broadcast_callback_ = std::move(callback);
+}
+
+void Application::StartProactiveChat(const std::string& prompt) {
+    Schedule([this, prompt]() {
+        if (!protocol_) return;
+        
+        auto state = GetDeviceState();
+        if (state == kDeviceStateIdle) {
+            if (!protocol_->IsAudioChannelOpened()) {
+                SetDeviceState(kDeviceStateConnecting);
+                // Switch to performance mode before connecting
+                auto& board = Board::GetInstance();
+                board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+                
+                if (protocol_->OpenAudioChannel()) {
+                    protocol_->SendTextPrompt(prompt);
+                    SetListeningMode(GetDefaultListeningMode());
+                } else {
+                    SetDeviceState(kDeviceStateIdle);
+                }
+            } else {
+                protocol_->SendTextPrompt(prompt);
+                SetListeningMode(GetDefaultListeningMode());
+            }
+        }
+    });
 }
 
 void Application::SendMcpMessage(const std::string& payload) {

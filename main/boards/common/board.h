@@ -8,6 +8,7 @@
 #include <string>
 #include <functional>
 #include <network_interface.h>
+#include <driver/i2c_master.h>
 
 #include "led/led.h"
 #include "backlight.h"
@@ -70,8 +71,11 @@ public:
     virtual Backlight* GetBacklight() { return nullptr; }
     virtual Led* GetLed();
     virtual AudioCodec* GetAudioCodec() = 0;
-    virtual bool GetTemperature(float& esp32temp);
+    virtual bool GetTemperature(float& temperature);
+    virtual bool GetHumidity(float& humidity) { return false; }
+    virtual bool GetAmbientLight(float& lux) { return false; }
     virtual Display* GetDisplay();
+    virtual i2c_master_bus_handle_t GetI2cBus() { return nullptr; }
     virtual Camera* GetCamera();
     virtual NetworkInterface* GetNetwork() = 0;
     virtual void StartNetwork() = 0;

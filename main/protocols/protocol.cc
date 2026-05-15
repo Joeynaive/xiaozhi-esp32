@@ -78,6 +78,12 @@ void Protocol::SendMcpMessage(const std::string& payload) {
     SendText(message);
 }
 
+void Protocol::SendTextPrompt(const std::string& text) {
+    // Send proactive text as STT text to the server to trigger AI response
+    std::string message = "{\"session_id\":\"" + session_id_ + "\",\"type\":\"stt\",\"text\":\"" + text + "\"}";
+    SendText(message);
+}
+
 bool Protocol::IsTimeout() const {
     const int kTimeoutSeconds = 120;
     auto now = std::chrono::steady_clock::now();

@@ -999,6 +999,11 @@ public:
         return display_;
     }
 
+    virtual i2c_master_bus_handle_t GetI2cBus() override
+    {
+        return i2c_bus_;
+    }
+
     Cst816s* GetTouchpad()
     {
         return cst816s_;

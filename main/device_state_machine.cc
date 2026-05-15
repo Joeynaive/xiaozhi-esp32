@@ -17,6 +17,7 @@ static const char* const STATE_STRINGS[] = {
     "upgrading",
     "activating",
     "audio_testing",
+    "bluetooth_mode",
     "fatal_error",
     "invalid_state"
 };
@@ -69,13 +70,19 @@ bool DeviceStateMachine::IsValidTransition(DeviceState from, DeviceState to) con
                    to == kDeviceStateActivating;
 
         case kDeviceStateIdle:
-            // Can go to connecting, listening (manual mode), speaking, activating, upgrading, or wifi configuring
+            // Can go to connecting, listening (manual mode), speaking, activating, upgrading, wifi configuring, or bluetooth mode
             return to == kDeviceStateConnecting ||
                    to == kDeviceStateListening ||
                    to == kDeviceStateSpeaking ||
                    to == kDeviceStateActivating ||
                    to == kDeviceStateUpgrading ||
-                   to == kDeviceStateWifiConfiguring;
+                   to == kDeviceStateWifiConfiguring ||
+                   to == kDeviceStateBluetoothMode;
+
+        case kDeviceStateBluetoothMode:
+            // Can go back to idle when disconnected, or upgrading if OTA is triggered
+            return to == kDeviceStateIdle ||
+                   to == kDeviceStateUpgrading;
 
         case kDeviceStateConnecting:
             // Can go to idle (failed) or listening (success)

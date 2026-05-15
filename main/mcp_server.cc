@@ -17,6 +17,8 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "lvgl_display.h"
+#include "emotion_manager.h"
+#include "sensor_manager.h"
 
 #define TAG "MCP"
 
@@ -120,6 +122,47 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
+
+    // Pet Care Tools
+    AddTool("self.pet.feed",
+        "Feed the pet to increase its satiety and mood. The amount can be between 10 and 50.",
+        PropertyList({
+            Property("amount", kPropertyTypeInteger, 10, 50, "The amount of food to give to the pet (10-50). Default is 20.")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            float amount = 20.0f;
+            if (properties[0].has_value()) {
+                amount = static_cast<float>(properties[0].value<int>());
+            }
+            EmotionManager::GetInstance().Feed(amount);
+            return ReturnValue("Successfully fed the pet.");
+        });
+
+    AddTool("self.pet.play",
+        "Play with the pet to increase its mood but consume its energy. The amount can be between 10 and 50.",
+        PropertyList({
+            Property("amount", kPropertyTypeInteger, 10, 50, "The duration/intensity of play (10-50). Default is 20.")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            float amount = 20.0f;
+            if (properties[0].has_value()) {
+                amount = static_cast<float>(properties[0].value<int>());
+            }
+            EmotionManager::GetInstance().Play(amount);
+            return ReturnValue("Successfully played with the pet.");
+        });
+
+    // Environment Sensor Tool
+    AddTool("self.environment.get_status",
+        "Get the current room environment status (temperature, humidity, ambient light level).",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto& sm = SensorManager::GetInstance();
+            char buffer[128];
+            snprintf(buffer, sizeof(buffer), "{\"temperature_c\": %.1f, \"humidity_percent\": %.1f, \"ambient_light_lux\": %.1f}",
+                sm.GetTemperature(), sm.GetHumidity(), sm.GetAmbientLight());
+            return ReturnValue(buffer);
+        });
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
@@ -295,6 +338,50 @@ void McpServer::AddUserOnlyTools() {
                 settings.SetString("download_url", url);
                 return true;
             });
+
+    // Pet related tools
+    AddUserOnlyTool("self.pet.get_status", "Get the real-time emotion status of the pet, including mood, satiety and energy.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto& em = EmotionManager::GetInstance();
+            cJSON *json = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json, "mood", em.GetMood());
+            cJSON_AddNumberToObject(json, "satiety", em.GetSatiety());
+            cJSON_AddNumberToObject(json, "energy", em.GetEnergy());
+            cJSON_AddStringToObject(json, "emotion", em.GetCurrentEmotion().c_str());
+            return json;
+        });
+
+    AddUserOnlyTool("self.pet.feed", "Feed the pet to increase its satiety.",
+        PropertyList({
+            Property("amount", kPropertyTypeInteger, 10, 1, 50)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            float amount = static_cast<float>(properties["amount"].value<int>());
+            EmotionManager::GetInstance().Feed(amount);
+            return true;
+        });
+
+    AddUserOnlyTool("self.pet.play", "Play with the pet to increase its mood, but it will consume energy.",
+        PropertyList({
+            Property("amount", kPropertyTypeInteger, 10, 1, 50)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            float amount = static_cast<float>(properties["amount"].value<int>());
+            EmotionManager::GetInstance().Play(amount);
+            return true;
+        });
+
+    AddUserOnlyTool("self.pet.get_environment", "Get the current environmental temperature, humidity and light level.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto& sm = SensorManager::GetInstance();
+            cJSON *json = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json, "temperature", sm.GetTemperature());
+            cJSON_AddNumberToObject(json, "humidity", sm.GetHumidity());
+            cJSON_AddNumberToObject(json, "ambient_light", sm.GetAmbientLight());
+            return json;
+        });
 }
 
 void McpServer::AddTool(McpTool* tool) {
