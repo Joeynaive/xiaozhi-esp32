@@ -14,6 +14,7 @@ public:
     virtual ~SingleLed();
 
     void OnStateChanged() override;
+    void ShowEnergy(float energy) override;
 
 private:
     std::mutex mutex_;

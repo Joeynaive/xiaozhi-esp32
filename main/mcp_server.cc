@@ -127,29 +127,23 @@ void McpServer::AddCommonTools() {
     AddTool("self.pet.feed",
         "Feed the pet to increase its satiety and mood. The amount can be between 10 and 50.",
         PropertyList({
-            Property("amount", kPropertyTypeInteger, 10, 50, "The amount of food to give to the pet (10-50). Default is 20.")
+            Property("amount", kPropertyTypeInteger, 20, 10, 50)
         }),
         [](const PropertyList& properties) -> ReturnValue {
-            float amount = 20.0f;
-            if (properties[0].has_value()) {
-                amount = static_cast<float>(properties[0].value<int>());
-            }
+            float amount = static_cast<float>(properties["amount"].value<int>());
             EmotionManager::GetInstance().Feed(amount);
-            return ReturnValue("Successfully fed the pet.");
+            return std::string("Successfully fed the pet.");
         });
 
     AddTool("self.pet.play",
         "Play with the pet to increase its mood but consume its energy. The amount can be between 10 and 50.",
         PropertyList({
-            Property("amount", kPropertyTypeInteger, 10, 50, "The duration/intensity of play (10-50). Default is 20.")
+            Property("amount", kPropertyTypeInteger, 20, 10, 50)
         }),
         [](const PropertyList& properties) -> ReturnValue {
-            float amount = 20.0f;
-            if (properties[0].has_value()) {
-                amount = static_cast<float>(properties[0].value<int>());
-            }
+            float amount = static_cast<float>(properties["amount"].value<int>());
             EmotionManager::GetInstance().Play(amount);
-            return ReturnValue("Successfully played with the pet.");
+            return std::string("Successfully played with the pet.");
         });
 
     // Environment Sensor Tool

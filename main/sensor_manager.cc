@@ -2,7 +2,10 @@
 #include "apds9960.h"
 #include "aht20.h"
 #include "application.h"
+#include "board.h"
+#include "display.h"
 #include "emotion_manager.h"
+#include "proactive_manager.h"
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
